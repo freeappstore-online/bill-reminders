@@ -49,6 +49,20 @@ const TAB_LABELS: Record<Tab, string> = {
   all: "All", upcoming: "Upcoming", overdue: "Overdue", paid: "Paid",
 };
 
+// Common bill presets for quick-add
+const BILL_PRESETS = [
+  { name: "Rent", category: "Housing", color: "#2563eb", frequency: "monthly" as Frequency },
+  { name: "Electricity", category: "Utilities", color: "#d97706", frequency: "monthly" as Frequency },
+  { name: "Water", category: "Utilities", color: "#0891b2", frequency: "monthly" as Frequency },
+  { name: "Internet", category: "Internet", color: "#9333ea", frequency: "monthly" as Frequency },
+  { name: "Phone", category: "Phone", color: "#16a34a", frequency: "monthly" as Frequency },
+  { name: "Netflix", category: "Subscriptions", color: "#dc2626", frequency: "monthly" as Frequency },
+  { name: "Spotify", category: "Subscriptions", color: "#16a34a", frequency: "monthly" as Frequency },
+  { name: "Car Insurance", category: "Insurance", color: "#65a30d", frequency: "monthly" as Frequency },
+  { name: "Health Insurance", category: "Insurance", color: "#db2777", frequency: "monthly" as Frequency },
+  { name: "Credit Card", category: "Credit Card", color: "#dc2626", frequency: "monthly" as Frequency },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function today(): string {
@@ -109,38 +123,31 @@ function nextDueDate(bill: Bill): string {
   return base.toISOString().split("T")[0];
 }
 
-function defaultBills(): Bill[] {
-  const t = today();
-  const addDays = (n: number) => {
-    const d = new Date(t + "T00:00:00");
-    d.setDate(d.getDate() + n);
-    return d.toISOString().split("T")[0];
-  };
-  return [
-    { id: newId(), name: "Rent", amount: 1200, dueDate: addDays(3), frequency: "monthly", category: "Housing", notes: "", paid: false, color: "#2563eb" },
-    { id: newId(), name: "Electricity", amount: 85, dueDate: addDays(10), frequency: "monthly", category: "Utilities", notes: "", paid: false, color: "#d97706" },
-    { id: newId(), name: "Netflix", amount: 15.99, dueDate: addDays(-2), frequency: "monthly", category: "Subscriptions", notes: "", paid: false, color: "#dc2626" },
-    { id: newId(), name: "Car Insurance", amount: 120, dueDate: addDays(20), frequency: "monthly", category: "Insurance", notes: "", paid: false, color: "#16a34a" },
-  ];
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
 }
 
 // ─── Bill Modal ───────────────────────────────────────────────────────────────
 
 interface ModalProps {
   bill?: Bill | null;
+  preset?: Partial<Bill> | null;
   onSave: (b: Bill) => void;
   onClose: () => void;
 }
 
-function BillModal({ bill, onSave, onClose }: ModalProps) {
+function BillModal({ bill, preset, onSave, onClose }: ModalProps) {
   const isEdit = !!bill;
-  const [name, setName] = useState(bill?.name ?? "");
+  const [name, setName] = useState(bill?.name ?? preset?.name ?? "");
   const [amount, setAmount] = useState(bill ? String(bill.amount) : "");
   const [dueDate, setDueDate] = useState(bill?.dueDate ?? today());
-  const [frequency, setFrequency] = useState<Frequency>(bill?.frequency ?? "monthly");
-  const [category, setCategory] = useState(bill?.category ?? "Other");
+  const [frequency, setFrequency] = useState<Frequency>(bill?.frequency ?? preset?.frequency ?? "monthly");
+  const [category, setCategory] = useState(bill?.category ?? preset?.category ?? "Other");
   const [notes, setNotes] = useState(bill?.notes ?? "");
-  const [color, setColor] = useState(bill?.color ?? COLORS[0]);
+  const [color, setColor] = useState(bill?.color ?? preset?.color ?? COLORS[0]);
   const [error, setError] = useState("");
 
   function handleSave() {
@@ -353,15 +360,59 @@ function HomePage({ bills, onGoToBills, onAddBill, onTogglePaid }: HomePageProps
 
   const urgent = [...overdue, ...dueSoon].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 4);
 
-  // Spending by category (unpaid)
   const byCategory: Record<string, number> = {};
   unpaid.forEach(b => { byCategory[b.category] = (byCategory[b.category] ?? 0) + b.amount; });
-  const topCategories = Object.entries(byCategory)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  const topCategories = Object.entries(byCategory).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxCat = topCategories[0]?.[1] ?? 1;
 
   const monthName = new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  // Empty state — no bills added yet
+  if (bills.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col gap-6">
+        <div>
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>
+            Good {getGreeting()} 👋
+          </h1>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Welcome to Bill Reminders</p>
+        </div>
+
+        <div className="rounded-[1.25rem] p-10 flex flex-col items-center gap-5 text-center"
+          style={{ border: "2px dashed var(--line)" }}>
+          <span className="text-6xl">💸</span>
+          <div>
+            <h2 className="text-xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>No bills yet</h2>
+            <p className="text-sm mt-1 max-w-xs mx-auto" style={{ color: "var(--muted)" }}>
+              Add your first bill to start tracking due dates, get overdue alerts, and see your spending breakdown.
+            </p>
+          </div>
+          <button onClick={onAddBill}
+            className="px-6 py-3 rounded-[0.75rem] font-bold text-white text-sm shadow"
+            style={{ background: "var(--accent)" }}>
+            ➕ Add Your First Bill
+          </button>
+        </div>
+
+        {/* Quick-add presets */}
+        <div>
+          <h2 className="font-bold text-lg mb-3" style={{ fontFamily: "Fraunces, serif" }}>
+            ⚡ Quick Add Common Bills
+          </h2>
+          <div className="grid grid-cols-2 gap-2">
+            {BILL_PRESETS.map(p => (
+              <button key={p.name} onClick={() => onAddBill()}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-[0.75rem] text-sm font-semibold text-left transition-opacity hover:opacity-80"
+                style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
+                <span className="text-lg">{CATEGORY_ICONS[p.category] ?? "📄"}</span>
+                <span style={{ color: "var(--ink)" }}>{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-6">
@@ -517,13 +568,6 @@ function HomePage({ bills, onGoToBills, onAddBill, onTogglePaid }: HomePageProps
   );
 }
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 17) return "afternoon";
-  return "evening";
-}
-
 // ─── Bills Page ───────────────────────────────────────────────────────────────
 
 interface BillsPageProps {
@@ -532,19 +576,26 @@ interface BillsPageProps {
   onDelete: (id: string) => void;
   onTogglePaid: (id: string) => void;
   openAddModal: boolean;
+  openPreset: Partial<Bill> | null;
   onClearOpenAdd: () => void;
 }
 
-function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, onClearOpenAdd }: BillsPageProps) {
+function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, openPreset, onClearOpenAdd }: BillsPageProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [sortBy, setSortBy] = useState<"dueDate" | "amount" | "name">("dueDate");
   const [showModal, setShowModal] = useState(false);
   const [editBill, setEditBill] = useState<Bill | null>(null);
+  const [activePreset, setActivePreset] = useState<Partial<Bill> | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
-    if (openAddModal) { setEditBill(null); setShowModal(true); onClearOpenAdd(); }
-  }, [openAddModal, onClearOpenAdd]);
+    if (openAddModal) {
+      setEditBill(null);
+      setActivePreset(openPreset);
+      setShowModal(true);
+      onClearOpenAdd();
+    }
+  }, [openAddModal, openPreset, onClearOpenAdd]);
 
   const filtered = bills.filter(b => {
     const s = getStatus(b);
@@ -576,7 +627,7 @@ function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, onClea
           <h1 className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>All Bills</h1>
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Manage your recurring payments</p>
         </div>
-        <button onClick={() => { setEditBill(null); setShowModal(true); }}
+        <button onClick={() => { setEditBill(null); setActivePreset(null); setShowModal(true); }}
           className="flex items-center gap-2 px-4 py-2 rounded-[0.75rem] font-bold text-white text-sm shadow"
           style={{ background: "var(--accent)" }}>
           <span className="text-lg leading-none">+</span> Add Bill
@@ -597,7 +648,7 @@ function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, onClea
             {tabCounts[t] > 0 && (
               <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold"
                 style={{
-                  background: t === "overdue" && tabCounts[t] > 0 ? "var(--error)" : tab === t ? "var(--accent)" : "var(--line-strong)",
+                  background: t === "overdue" && tabCounts[t] > 0 ? "var(--error)" : tab === t ? "var(--accent)" : "var(--line)",
                   color: (t === "overdue" && tabCounts[t] > 0) || tab === t ? "#fff" : "var(--muted)",
                 }}>
                 {tabCounts[t]}
@@ -629,12 +680,19 @@ function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, onClea
           <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
             {tab === "all" ? "Tap + Add Bill to get started" : "Switch to another tab or add a new bill"}
           </p>
+          {tab === "all" && (
+            <button onClick={() => { setEditBill(null); setActivePreset(null); setShowModal(true); }}
+              className="mt-4 px-5 py-2 rounded-[0.75rem] font-bold text-white text-sm"
+              style={{ background: "var(--accent)" }}>
+              ➕ Add Bill
+            </button>
+          )}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 pb-4">
           {sorted.map(bill => (
             <BillCard key={bill.id} bill={bill}
-              onEdit={() => { setEditBill(bill); setShowModal(true); }}
+              onEdit={() => { setEditBill(bill); setActivePreset(null); setShowModal(true); }}
               onDelete={() => setDeleteConfirm(bill.id)}
               onTogglePaid={() => onTogglePaid(bill.id)} />
           ))}
@@ -668,8 +726,12 @@ function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, onClea
       )}
 
       {showModal && (
-        <BillModal bill={editBill} onSave={b => { onSave(b); setShowModal(false); setEditBill(null); }}
-          onClose={() => { setShowModal(false); setEditBill(null); }} />
+        <BillModal
+          bill={editBill}
+          preset={activePreset}
+          onSave={b => { onSave(b); setShowModal(false); setEditBill(null); setActivePreset(null); }}
+          onClose={() => { setShowModal(false); setEditBill(null); setActivePreset(null); }}
+        />
       )}
     </div>
   );
@@ -681,12 +743,13 @@ export default function App() {
   const [bills, setBills] = useState<Bill[]>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : defaultBills();
-    } catch { return defaultBills(); }
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
   });
 
   const [page, setPage] = useState<Page>("home");
   const [triggerAddModal, setTriggerAddModal] = useState(false);
+  const [addPreset, setAddPreset] = useState<Partial<Bill> | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(bills));
@@ -723,13 +786,19 @@ export default function App() {
     }));
   }, []);
 
+  const handleAddBill = useCallback((preset?: Partial<Bill>) => {
+    setAddPreset(preset ?? null);
+    setPage("bills");
+    setTriggerAddModal(true);
+  }, []);
+
   return (
     <Shell page={page} onNavigate={setPage}>
       {page === "home" ? (
         <HomePage
           bills={bills}
           onGoToBills={() => setPage("bills")}
-          onAddBill={() => { setPage("bills"); setTriggerAddModal(true); }}
+          onAddBill={() => handleAddBill()}
           onTogglePaid={togglePaid}
         />
       ) : (
@@ -739,6 +808,7 @@ export default function App() {
           onDelete={deleteBill}
           onTogglePaid={togglePaid}
           openAddModal={triggerAddModal}
+          openPreset={addPreset}
           onClearOpenAdd={() => setTriggerAddModal(false)}
         />
       )}
