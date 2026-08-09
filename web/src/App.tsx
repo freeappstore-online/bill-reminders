@@ -5,12 +5,14 @@ import { Shell } from "./components/Shell";
 
 type Frequency = "once" | "weekly" | "monthly" | "yearly";
 type Status = "upcoming" | "due-soon" | "overdue" | "paid";
+type Page = "home" | "bills";
+type Tab = "all" | "upcoming" | "overdue" | "paid";
 
 interface Bill {
   id: string;
   name: string;
   amount: number;
-  dueDate: string; // ISO date string YYYY-MM-DD
+  dueDate: string;
   frequency: Frequency;
   category: string;
   notes: string;
@@ -41,6 +43,10 @@ const COLORS = [
 
 const FREQ_LABELS: Record<Frequency, string> = {
   once: "One-time", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly",
+};
+
+const TAB_LABELS: Record<Tab, string> = {
+  all: "All", upcoming: "Upcoming", overdue: "Overdue", paid: "Paid",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,8 +109,6 @@ function nextDueDate(bill: Bill): string {
   return base.toISOString().split("T")[0];
 }
 
-// ─── Default bills ────────────────────────────────────────────────────────────
-
 function defaultBills(): Bill[] {
   const t = today();
   const addDays = (n: number) => {
@@ -120,7 +124,7 @@ function defaultBills(): Bill[] {
   ];
 }
 
-// ─── Modal ────────────────────────────────────────────────────────────────────
+// ─── Bill Modal ───────────────────────────────────────────────────────────────
 
 interface ModalProps {
   bill?: Bill | null;
@@ -144,153 +148,99 @@ function BillModal({ bill, onSave, onClose }: ModalProps) {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt < 0) { setError("Enter a valid amount."); return; }
     if (!dueDate) { setError("Due date is required."); return; }
-    const saved: Bill = {
+    onSave({
       id: bill?.id ?? newId(),
-      name: name.trim(),
-      amount: amt,
-      dueDate,
-      frequency,
-      category,
-      notes: notes.trim(),
-      paid: bill?.paid ?? false,
-      paidDate: bill?.paidDate,
-      color,
-    };
-    onSave(saved);
+      name: name.trim(), amount: amt, dueDate, frequency,
+      category, notes: notes.trim(), paid: bill?.paid ?? false,
+      paidDate: bill?.paidDate, color,
+    });
   }
+
+  const inputStyle = {
+    background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)",
+  };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.45)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div
-        className="w-full max-w-md rounded-[1.25rem] p-6 shadow-2xl flex flex-col gap-4"
-        style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
-      >
+      <div className="w-full max-w-md rounded-[1.25rem] p-6 shadow-2xl flex flex-col gap-4"
+        style={{ background: "var(--paper)", border: "1px solid var(--line)" }}>
         <h2 className="text-xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>
           {isEdit ? "Edit Bill" : "Add Bill"}
         </h2>
-
         {error && (
           <p className="text-sm rounded-lg px-3 py-2" style={{ background: "rgba(220,38,38,0.1)", color: "var(--error)" }}>
             {error}
           </p>
         )}
-
-        {/* Name */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Bill Name</label>
-          <input
-            className="rounded-[0.75rem] px-3 py-2 text-sm outline-none border"
-            style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
-            placeholder="e.g. Rent, Netflix…"
-            value={name}
-            onChange={e => { setName(e.target.value); setError(""); }}
-          />
+          <input className="rounded-[0.75rem] px-3 py-2 text-sm outline-none" style={inputStyle}
+            placeholder="e.g. Rent, Netflix…" value={name}
+            onChange={e => { setName(e.target.value); setError(""); }} />
         </div>
-
-        {/* Amount + Category */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Amount ($)</label>
-            <input
-              type="number" min="0" step="0.01"
-              className="rounded-[0.75rem] px-3 py-2 text-sm outline-none border"
-              style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
-              placeholder="0.00"
-              value={amount}
-              onChange={e => { setAmount(e.target.value); setError(""); }}
-            />
+            <input type="number" min="0" step="0.01" className="rounded-[0.75rem] px-3 py-2 text-sm outline-none"
+              style={inputStyle} placeholder="0.00" value={amount}
+              onChange={e => { setAmount(e.target.value); setError(""); }} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Category</label>
-            <select
-              className="rounded-[0.75rem] px-3 py-2 text-sm outline-none border"
-              style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-            >
+            <select className="rounded-[0.75rem] px-3 py-2 text-sm outline-none" style={inputStyle}
+              value={category} onChange={e => setCategory(e.target.value)}>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
         </div>
-
-        {/* Due Date + Frequency */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Due Date</label>
-            <input
-              type="date"
-              className="rounded-[0.75rem] px-3 py-2 text-sm outline-none border"
-              style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
-              value={dueDate}
-              onChange={e => { setDueDate(e.target.value); setError(""); }}
-            />
+            <input type="date" className="rounded-[0.75rem] px-3 py-2 text-sm outline-none" style={inputStyle}
+              value={dueDate} onChange={e => { setDueDate(e.target.value); setError(""); }} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Frequency</label>
-            <select
-              className="rounded-[0.75rem] px-3 py-2 text-sm outline-none border"
-              style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
-              value={frequency}
-              onChange={e => setFrequency(e.target.value as Frequency)}
-            >
+            <select className="rounded-[0.75rem] px-3 py-2 text-sm outline-none" style={inputStyle}
+              value={frequency} onChange={e => setFrequency(e.target.value as Frequency)}>
               {(Object.keys(FREQ_LABELS) as Frequency[]).map(f => (
                 <option key={f} value={f}>{FREQ_LABELS[f]}</option>
               ))}
             </select>
           </div>
         </div>
-
-        {/* Color */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Color</label>
           <div className="flex gap-2 flex-wrap">
             {COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
+              <button key={c} onClick={() => setColor(c)}
                 className="w-7 h-7 rounded-full transition-transform"
                 style={{
                   background: c,
-                  outline: color === c ? `3px solid var(--ink)` : "3px solid transparent",
+                  outline: color === c ? "3px solid var(--ink)" : "3px solid transparent",
                   outlineOffset: "2px",
                   transform: color === c ? "scale(1.15)" : "scale(1)",
-                }}
-              />
+                }} />
             ))}
           </div>
         </div>
-
-        {/* Notes */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Notes (optional)</label>
-          <textarea
-            rows={2}
-            className="rounded-[0.75rem] px-3 py-2 text-sm outline-none border resize-none"
-            style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}
-            placeholder="Account number, website, etc."
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-          />
+          <textarea rows={2} className="rounded-[0.75rem] px-3 py-2 text-sm outline-none resize-none"
+            style={inputStyle} placeholder="Account number, website, etc."
+            value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
-
-        {/* Actions */}
         <div className="flex gap-3 pt-1">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-[0.75rem] py-2 text-sm font-semibold border"
-            style={{ border: "1px solid var(--line)", color: "var(--muted)" }}
-          >
+          <button onClick={onClose} className="flex-1 rounded-[0.75rem] py-2 text-sm font-semibold"
+            style={{ border: "1px solid var(--line)", color: "var(--muted)" }}>
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 rounded-[0.75rem] py-2 text-sm font-bold text-white"
-            style={{ background: color }}
-          >
+          <button onClick={handleSave} className="flex-1 rounded-[0.75rem] py-2 text-sm font-bold text-white"
+            style={{ background: color }}>
             {isEdit ? "Save Changes" : "Add Bill"}
           </button>
         </div>
@@ -311,7 +261,6 @@ interface BillCardProps {
 function BillCard({ bill, onEdit, onDelete, onTogglePaid }: BillCardProps) {
   const status = getStatus(bill);
   const days = daysUntil(bill.dueDate);
-
   let daysLabel = "";
   if (!bill.paid) {
     if (days === 0) daysLabel = "Due today!";
@@ -324,40 +273,24 @@ function BillCard({ bill, onEdit, onDelete, onTogglePaid }: BillCardProps) {
   }
 
   return (
-    <div
-      className="rounded-[1.25rem] p-4 flex flex-col gap-3 transition-shadow hover:shadow-md"
-      style={{
-        background: "var(--paper)",
-        border: "1px solid var(--line)",
-        opacity: bill.paid ? 0.7 : 1,
-      }}
-    >
-      {/* Top row */}
+    <div className="rounded-[1.25rem] p-4 flex flex-col gap-3 transition-shadow hover:shadow-md"
+      style={{ background: "var(--paper)", border: "1px solid var(--line)", opacity: bill.paid ? 0.7 : 1 }}>
       <div className="flex items-start gap-3">
-        {/* Color dot + icon */}
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
-          style={{ background: bill.color + "22" }}
-        >
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
+          style={{ background: bill.color + "22" }}>
           {CATEGORY_ICONS[bill.category] ?? "📄"}
         </div>
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3
-              className="font-bold text-base truncate"
-              style={{
-                fontFamily: "Fraunces, serif",
-                textDecoration: bill.paid ? "line-through" : "none",
-                color: bill.paid ? "var(--muted)" : "var(--ink)",
-              }}
-            >
+            <h3 className="font-bold text-base truncate" style={{
+              fontFamily: "Fraunces, serif",
+              textDecoration: bill.paid ? "line-through" : "none",
+              color: bill.paid ? "var(--muted)" : "var(--ink)",
+            }}>
               {bill.name}
             </h3>
-            <span
-              className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
-              style={{ background: statusColor(status) + "22", color: statusColor(status) }}
-            >
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
+              style={{ background: statusColor(status) + "22", color: statusColor(status) }}>
               {statusLabel(status)}
             </span>
           </div>
@@ -365,60 +298,34 @@ function BillCard({ bill, onEdit, onDelete, onTogglePaid }: BillCardProps) {
             {bill.category} · {FREQ_LABELS[bill.frequency]}
           </p>
         </div>
-
         <div className="text-right shrink-0">
-          <p className="font-bold text-lg" style={{ color: bill.color }}>
-            {formatCurrency(bill.amount)}
-          </p>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>
-            {formatDate(bill.dueDate)}
-          </p>
+          <p className="font-bold text-lg" style={{ color: bill.color }}>{formatCurrency(bill.amount)}</p>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>{formatDate(bill.dueDate)}</p>
         </div>
       </div>
-
-      {/* Days label */}
-      <div
-        className="text-sm font-semibold px-3 py-1.5 rounded-lg text-center"
-        style={{
-          background: statusColor(status) + "15",
-          color: statusColor(status),
-        }}
-      >
+      <div className="text-sm font-semibold px-3 py-1.5 rounded-lg text-center"
+        style={{ background: statusColor(status) + "15", color: statusColor(status) }}>
         {daysLabel}
       </div>
-
-      {/* Notes */}
       {bill.notes && (
-        <p className="text-xs px-1" style={{ color: "var(--muted)" }}>
-          📝 {bill.notes}
-        </p>
+        <p className="text-xs px-1" style={{ color: "var(--muted)" }}>📝 {bill.notes}</p>
       )}
-
-      {/* Actions */}
       <div className="flex gap-2 pt-1">
-        <button
-          onClick={onTogglePaid}
+        <button onClick={onTogglePaid}
           className="flex-1 rounded-[0.75rem] py-1.5 text-sm font-semibold transition-colors"
           style={{
             background: bill.paid ? "var(--panel)" : statusColor(status) + "18",
             color: bill.paid ? "var(--muted)" : statusColor(status),
             border: `1px solid ${bill.paid ? "var(--line)" : statusColor(status) + "44"}`,
-          }}
-        >
+          }}>
           {bill.paid ? "↩ Mark Unpaid" : "✓ Mark Paid"}
         </button>
-        <button
-          onClick={onEdit}
-          className="px-3 rounded-[0.75rem] text-sm font-semibold border"
-          style={{ border: "1px solid var(--line)", color: "var(--muted)" }}
-        >
+        <button onClick={onEdit} className="px-3 rounded-[0.75rem] text-sm font-semibold border"
+          style={{ border: "1px solid var(--line)", color: "var(--muted)" }}>
           Edit
         </button>
-        <button
-          onClick={onDelete}
-          className="px-3 rounded-[0.75rem] text-sm font-semibold"
-          style={{ background: "rgba(220,38,38,0.08)", color: "var(--error)" }}
-        >
+        <button onClick={onDelete} className="px-3 rounded-[0.75rem] text-sm font-semibold"
+          style={{ background: "rgba(220,38,38,0.08)", color: "var(--error)" }}>
           ✕
         </button>
       </div>
@@ -426,115 +333,219 @@ function BillCard({ bill, onEdit, onDelete, onTogglePaid }: BillCardProps) {
   );
 }
 
-// ─── Summary Card ─────────────────────────────────────────────────────────────
+// ─── Home Page ────────────────────────────────────────────────────────────────
 
-function SummaryCard({ bills }: { bills: Bill[] }) {
+interface HomePageProps {
+  bills: Bill[];
+  onGoToBills: () => void;
+  onAddBill: () => void;
+  onTogglePaid: (id: string) => void;
+}
+
+function HomePage({ bills, onGoToBills, onAddBill, onTogglePaid }: HomePageProps) {
   const unpaid = bills.filter(b => !b.paid);
   const overdue = unpaid.filter(b => daysUntil(b.dueDate) < 0);
   const dueSoon = unpaid.filter(b => { const d = daysUntil(b.dueDate); return d >= 0 && d <= 7; });
   const totalDue = unpaid.reduce((s, b) => s + b.amount, 0);
+  const totalPaidThisMonth = bills
+    .filter(b => b.paid && b.paidDate?.startsWith(new Date().toISOString().slice(0, 7)))
+    .reduce((s, b) => s + b.amount, 0);
+
+  const urgent = [...overdue, ...dueSoon].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 4);
+
+  // Spending by category (unpaid)
+  const byCategory: Record<string, number> = {};
+  unpaid.forEach(b => { byCategory[b.category] = (byCategory[b.category] ?? 0) + b.amount; });
+  const topCategories = Object.entries(byCategory)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const maxCat = topCategories[0]?.[1] ?? 1;
+
+  const monthName = new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
   return (
-    <div
-      className="rounded-[1.25rem] p-5 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
-      style={{ background: "var(--panel)", border: "1px solid var(--line)" }}
-    >
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Total Due</p>
-        <p className="text-2xl font-bold" style={{ fontFamily: "Fraunces, serif", color: "var(--accent)" }}>
-          {formatCurrency(totalDue)}
+    <div className="max-w-2xl mx-auto flex flex-col gap-6">
+      {/* Greeting */}
+      <div>
+        <h1 className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>
+          Good {getGreeting()} 👋
+        </h1>
+        <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+          Here's your bill overview for {monthName}
         </p>
       </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Unpaid Bills</p>
-        <p className="text-2xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>{unpaid.length}</p>
+
+      {/* Hero stat cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-[1.25rem] p-5 flex flex-col gap-1 col-span-2"
+          style={{ background: "var(--accent)", color: "#fff" }}>
+          <p className="text-sm font-semibold opacity-80">Total Outstanding</p>
+          <p className="text-4xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>
+            {formatCurrency(totalDue)}
+          </p>
+          <p className="text-sm opacity-75">{unpaid.length} unpaid bill{unpaid.length !== 1 ? "s" : ""}</p>
+        </div>
+
+        <div className="rounded-[1.25rem] p-4 flex flex-col gap-1"
+          style={{ background: overdue.length > 0 ? "rgba(220,38,38,0.08)" : "var(--panel)", border: "1px solid var(--line)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: overdue.length > 0 ? "var(--error)" : "var(--muted)" }}>
+            Overdue
+          </p>
+          <p className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif", color: overdue.length > 0 ? "var(--error)" : "var(--ink)" }}>
+            {overdue.length}
+          </p>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            {overdue.length === 0 ? "All clear!" : "Need attention"}
+          </p>
+        </div>
+
+        <div className="rounded-[1.25rem] p-4 flex flex-col gap-1"
+          style={{ background: dueSoon.length > 0 ? "rgba(217,119,6,0.08)" : "var(--panel)", border: "1px solid var(--line)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: dueSoon.length > 0 ? "var(--warning)" : "var(--muted)" }}>
+            Due This Week
+          </p>
+          <p className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif", color: dueSoon.length > 0 ? "var(--warning)" : "var(--ink)" }}>
+            {dueSoon.length}
+          </p>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            {dueSoon.length === 0 ? "Nothing urgent" : "Coming up soon"}
+          </p>
+        </div>
+
+        <div className="rounded-[1.25rem] p-4 flex flex-col gap-1"
+          style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Paid This Month</p>
+          <p className="text-2xl font-bold" style={{ fontFamily: "Fraunces, serif", color: "var(--success)" }}>
+            {formatCurrency(totalPaidThisMonth)}
+          </p>
+        </div>
+
+        <div className="rounded-[1.25rem] p-4 flex flex-col gap-1"
+          style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Total Bills</p>
+          <p className="text-2xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>{bills.length}</p>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>{bills.filter(b => b.paid).length} paid</p>
+        </div>
       </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Overdue</p>
-        <p className="text-2xl font-bold" style={{ fontFamily: "Fraunces, serif", color: overdue.length ? "var(--error)" : "var(--ink)" }}>
-          {overdue.length}
-        </p>
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted)" }}>Due This Week</p>
-        <p className="text-2xl font-bold" style={{ fontFamily: "Fraunces, serif", color: dueSoon.length ? "var(--warning)" : "var(--ink)" }}>
-          {dueSoon.length}
-        </p>
+
+      {/* Urgent bills */}
+      {urgent.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-lg" style={{ fontFamily: "Fraunces, serif" }}>
+              🚨 Needs Attention
+            </h2>
+            <button onClick={onGoToBills} className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+              View all →
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {urgent.map(bill => {
+              const status = getStatus(bill);
+              const days = daysUntil(bill.dueDate);
+              const daysLabel = days === 0 ? "Due today!" : days < 0 ? `${Math.abs(days)}d overdue` : `In ${days}d`;
+              return (
+                <div key={bill.id}
+                  className="rounded-[1rem] p-3 flex items-center gap-3"
+                  style={{ background: "var(--paper)", border: `1px solid ${statusColor(status)}44` }}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-lg shrink-0"
+                    style={{ background: bill.color + "22" }}>
+                    {CATEGORY_ICONS[bill.category] ?? "📄"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{bill.name}</p>
+                    <p className="text-xs" style={{ color: statusColor(status) }}>{daysLabel}</p>
+                  </div>
+                  <p className="font-bold text-sm shrink-0" style={{ color: bill.color }}>
+                    {formatCurrency(bill.amount)}
+                  </p>
+                  <button
+                    onClick={() => onTogglePaid(bill.id)}
+                    className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-full"
+                    style={{ background: statusColor(status) + "18", color: statusColor(status) }}>
+                    Pay
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Spending by category */}
+      {topCategories.length > 0 && (
+        <div>
+          <h2 className="font-bold text-lg mb-3" style={{ fontFamily: "Fraunces, serif" }}>
+            📊 Spending Breakdown
+          </h2>
+          <div className="rounded-[1.25rem] p-4 flex flex-col gap-3"
+            style={{ background: "var(--panel)", border: "1px solid var(--line)" }}>
+            {topCategories.map(([cat, amt]) => (
+              <div key={cat} className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <span>{CATEGORY_ICONS[cat] ?? "📄"}</span> {cat}
+                  </span>
+                  <span className="font-bold">{formatCurrency(amt)}</span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--line)" }}>
+                  <div className="h-full rounded-full transition-all"
+                    style={{ width: `${(amt / maxCat) * 100}%`, background: "var(--accent)" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3 pb-4">
+        <button onClick={onAddBill}
+          className="rounded-[1.25rem] p-4 flex flex-col items-center gap-2 font-semibold text-sm transition-opacity hover:opacity-80"
+          style={{ background: "var(--accent)", color: "#fff" }}>
+          <span className="text-2xl">➕</span>
+          Add New Bill
+        </button>
+        <button onClick={onGoToBills}
+          className="rounded-[1.25rem] p-4 flex flex-col items-center gap-2 font-semibold text-sm transition-opacity hover:opacity-80"
+          style={{ background: "var(--panel)", border: "1px solid var(--line)", color: "var(--ink)" }}>
+          <span className="text-2xl">💸</span>
+          Manage Bills
+        </button>
       </div>
     </div>
   );
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
+}
 
-type Tab = "all" | "upcoming" | "overdue" | "paid";
+// ─── Bills Page ───────────────────────────────────────────────────────────────
 
-const TAB_LABELS: Record<Tab, string> = {
-  all: "All", upcoming: "Upcoming", overdue: "Overdue", paid: "Paid",
-};
+interface BillsPageProps {
+  bills: Bill[];
+  onSave: (b: Bill) => void;
+  onDelete: (id: string) => void;
+  onTogglePaid: (id: string) => void;
+  openAddModal: boolean;
+  onClearOpenAdd: () => void;
+}
 
-export default function App() {
-  const [bills, setBills] = useState<Bill[]>(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : defaultBills();
-    } catch {
-      return defaultBills();
-    }
-  });
-
+function BillsPage({ bills, onSave, onDelete, onTogglePaid, openAddModal, onClearOpenAdd }: BillsPageProps) {
   const [tab, setTab] = useState<Tab>("all");
+  const [sortBy, setSortBy] = useState<"dueDate" | "amount" | "name">("dueDate");
   const [showModal, setShowModal] = useState(false);
   const [editBill, setEditBill] = useState<Bill | null>(null);
-  const [sortBy, setSortBy] = useState<"dueDate" | "amount" | "name">("dueDate");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Persist
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(bills));
-  }, [bills]);
+    if (openAddModal) { setEditBill(null); setShowModal(true); onClearOpenAdd(); }
+  }, [openAddModal, onClearOpenAdd]);
 
-  // Auto-advance recurring bills that have been paid
-  useEffect(() => {
-    setBills(prev => prev.map(b => {
-      if (b.paid && b.frequency !== "once") {
-        const next = nextDueDate(b);
-        if (next !== b.dueDate) {
-          return { ...b, paid: false, paidDate: undefined, dueDate: next };
-        }
-      }
-      return b;
-    }));
-  }, []);
-
-  const saveBill = useCallback((b: Bill) => {
-    setBills(prev => {
-      const idx = prev.findIndex(x => x.id === b.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = b;
-        return next;
-      }
-      return [...prev, b];
-    });
-    setShowModal(false);
-    setEditBill(null);
-  }, []);
-
-  const deleteBill = useCallback((id: string) => {
-    setBills(prev => prev.filter(b => b.id !== id));
-    setShowDeleteConfirm(null);
-  }, []);
-
-  const togglePaid = useCallback((id: string) => {
-    setBills(prev => prev.map(b => {
-      if (b.id !== id) return b;
-      const nowPaid = !b.paid;
-      return { ...b, paid: nowPaid, paidDate: nowPaid ? today() : undefined };
-    }));
-  }, []);
-
-  // Filter
   const filtered = bills.filter(b => {
     const s = getStatus(b);
     if (tab === "all") return true;
@@ -544,7 +555,6 @@ export default function App() {
     return true;
   });
 
-  // Sort
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === "dueDate") return a.dueDate.localeCompare(b.dueDate);
     if (sortBy === "amount") return b.amount - a.amount;
@@ -560,147 +570,176 @@ export default function App() {
   };
 
   return (
-    <Shell>
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>
-              Bill Reminders
-            </h1>
-            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-              Stay on top of your payments
-            </p>
-          </div>
-          <button
-            onClick={() => { setEditBill(null); setShowModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-[0.75rem] font-bold text-white text-sm shadow"
-            style={{ background: "var(--accent)" }}
-          >
-            <span className="text-lg leading-none">+</span> Add Bill
-          </button>
+    <div className="max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold" style={{ fontFamily: "Fraunces, serif" }}>All Bills</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>Manage your recurring payments</p>
         </div>
-
-        {/* Summary */}
-        <SummaryCard bills={bills} />
-
-        {/* Tabs */}
-        <div className="flex gap-1 mb-4 p-1 rounded-[1rem]" style={{ background: "var(--panel)" }}>
-          {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className="flex-1 rounded-[0.75rem] py-1.5 text-sm font-semibold transition-colors relative"
-              style={{
-                background: tab === t ? "var(--paper)" : "transparent",
-                color: tab === t ? "var(--ink)" : "var(--muted)",
-                boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-              }}
-            >
-              {TAB_LABELS[t]}
-              {tabCounts[t] > 0 && (
-                <span
-                  className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold"
-                  style={{
-                    background: t === "overdue" && tabCounts[t] > 0 ? "var(--error)" :
-                      tab === t ? "var(--accent)" : "var(--line-strong)",
-                    color: (t === "overdue" && tabCounts[t] > 0) || tab === t ? "#fff" : "var(--muted)",
-                  }}
-                >
-                  {tabCounts[t]}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Sort */}
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>Sort:</span>
-          {(["dueDate", "amount", "name"] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setSortBy(s)}
-              className="text-xs px-2.5 py-1 rounded-full font-semibold"
-              style={{
-                background: sortBy === s ? "var(--accent)" : "var(--panel)",
-                color: sortBy === s ? "#fff" : "var(--muted)",
-              }}
-            >
-              {s === "dueDate" ? "Due Date" : s === "amount" ? "Amount" : "Name"}
-            </button>
-          ))}
-        </div>
-
-        {/* Bill list */}
-        {sorted.length === 0 ? (
-          <div
-            className="rounded-[1.25rem] p-12 text-center"
-            style={{ border: "2px dashed var(--line)" }}
-          >
-            <p className="text-4xl mb-3">💸</p>
-            <p className="font-semibold" style={{ fontFamily: "Fraunces, serif" }}>
-              {tab === "all" ? "No bills yet" : `No ${TAB_LABELS[tab].toLowerCase()} bills`}
-            </p>
-            <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-              {tab === "all" ? "Tap + Add Bill to get started" : "Switch to another tab or add a new bill"}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {sorted.map(bill => (
-              <BillCard
-                key={bill.id}
-                bill={bill}
-                onEdit={() => { setEditBill(bill); setShowModal(true); }}
-                onDelete={() => setShowDeleteConfirm(bill.id)}
-                onTogglePaid={() => togglePaid(bill.id)}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Delete confirm */}
-        {showDeleteConfirm && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: "rgba(0,0,0,0.45)" }}
-          >
-            <div
-              className="w-full max-w-sm rounded-[1.25rem] p-6 flex flex-col gap-4"
-              style={{ background: "var(--paper)", border: "1px solid var(--line)" }}
-            >
-              <h2 className="text-lg font-bold" style={{ fontFamily: "Fraunces, serif" }}>Delete Bill?</h2>
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                This will permanently remove the bill. This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(null)}
-                  className="flex-1 rounded-[0.75rem] py-2 text-sm font-semibold border"
-                  style={{ border: "1px solid var(--line)", color: "var(--muted)" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => deleteBill(showDeleteConfirm)}
-                  className="flex-1 rounded-[0.75rem] py-2 text-sm font-bold text-white"
-                  style={{ background: "var(--error)" }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <button onClick={() => { setEditBill(null); setShowModal(true); }}
+          className="flex items-center gap-2 px-4 py-2 rounded-[0.75rem] font-bold text-white text-sm shadow"
+          style={{ background: "var(--accent)" }}>
+          <span className="text-lg leading-none">+</span> Add Bill
+        </button>
       </div>
 
-      {/* Add / Edit modal */}
+      {/* Tabs */}
+      <div className="flex gap-1 mb-4 p-1 rounded-[1rem]" style={{ background: "var(--panel)" }}>
+        {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className="flex-1 rounded-[0.75rem] py-1.5 text-sm font-semibold transition-colors"
+            style={{
+              background: tab === t ? "var(--paper)" : "transparent",
+              color: tab === t ? "var(--ink)" : "var(--muted)",
+              boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
+            }}>
+            {TAB_LABELS[t]}
+            {tabCounts[t] > 0 && (
+              <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full font-bold"
+                style={{
+                  background: t === "overdue" && tabCounts[t] > 0 ? "var(--error)" : tab === t ? "var(--accent)" : "var(--line-strong)",
+                  color: (t === "overdue" && tabCounts[t] > 0) || tab === t ? "#fff" : "var(--muted)",
+                }}>
+                {tabCounts[t]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Sort */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>Sort:</span>
+        {(["dueDate", "amount", "name"] as const).map(s => (
+          <button key={s} onClick={() => setSortBy(s)}
+            className="text-xs px-2.5 py-1 rounded-full font-semibold"
+            style={{ background: sortBy === s ? "var(--accent)" : "var(--panel)", color: sortBy === s ? "#fff" : "var(--muted)" }}>
+            {s === "dueDate" ? "Due Date" : s === "amount" ? "Amount" : "Name"}
+          </button>
+        ))}
+      </div>
+
+      {/* List */}
+      {sorted.length === 0 ? (
+        <div className="rounded-[1.25rem] p-12 text-center" style={{ border: "2px dashed var(--line)" }}>
+          <p className="text-4xl mb-3">💸</p>
+          <p className="font-semibold" style={{ fontFamily: "Fraunces, serif" }}>
+            {tab === "all" ? "No bills yet" : `No ${TAB_LABELS[tab].toLowerCase()} bills`}
+          </p>
+          <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+            {tab === "all" ? "Tap + Add Bill to get started" : "Switch to another tab or add a new bill"}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {sorted.map(bill => (
+            <BillCard key={bill.id} bill={bill}
+              onEdit={() => { setEditBill(bill); setShowModal(true); }}
+              onDelete={() => setDeleteConfirm(bill.id)}
+              onTogglePaid={() => onTogglePaid(bill.id)} />
+          ))}
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.45)" }}>
+          <div className="w-full max-w-sm rounded-[1.25rem] p-6 flex flex-col gap-4"
+            style={{ background: "var(--paper)", border: "1px solid var(--line)" }}>
+            <h2 className="text-lg font-bold" style={{ fontFamily: "Fraunces, serif" }}>Delete Bill?</h2>
+            <p className="text-sm" style={{ color: "var(--muted)" }}>
+              This will permanently remove the bill. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-[0.75rem] py-2 text-sm font-semibold"
+                style={{ border: "1px solid var(--line)", color: "var(--muted)" }}>
+                Cancel
+              </button>
+              <button onClick={() => { onDelete(deleteConfirm); setDeleteConfirm(null); }}
+                className="flex-1 rounded-[0.75rem] py-2 text-sm font-bold text-white"
+                style={{ background: "var(--error)" }}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
-        <BillModal
-          bill={editBill}
+        <BillModal bill={editBill} onSave={b => { onSave(b); setShowModal(false); setEditBill(null); }}
+          onClose={() => { setShowModal(false); setEditBill(null); }} />
+      )}
+    </div>
+  );
+}
+
+// ─── App Root ─────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [bills, setBills] = useState<Bill[]>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : defaultBills();
+    } catch { return defaultBills(); }
+  });
+
+  const [page, setPage] = useState<Page>("home");
+  const [triggerAddModal, setTriggerAddModal] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bills));
+  }, [bills]);
+
+  // Auto-advance recurring bills
+  useEffect(() => {
+    setBills(prev => prev.map(b => {
+      if (b.paid && b.frequency !== "once") {
+        const next = nextDueDate(b);
+        if (next !== b.dueDate) return { ...b, paid: false, paidDate: undefined, dueDate: next };
+      }
+      return b;
+    }));
+  }, []);
+
+  const saveBill = useCallback((b: Bill) => {
+    setBills(prev => {
+      const idx = prev.findIndex(x => x.id === b.id);
+      if (idx >= 0) { const n = [...prev]; n[idx] = b; return n; }
+      return [...prev, b];
+    });
+  }, []);
+
+  const deleteBill = useCallback((id: string) => {
+    setBills(prev => prev.filter(b => b.id !== id));
+  }, []);
+
+  const togglePaid = useCallback((id: string) => {
+    setBills(prev => prev.map(b => {
+      if (b.id !== id) return b;
+      const nowPaid = !b.paid;
+      return { ...b, paid: nowPaid, paidDate: nowPaid ? today() : undefined };
+    }));
+  }, []);
+
+  return (
+    <Shell page={page} onNavigate={setPage}>
+      {page === "home" ? (
+        <HomePage
+          bills={bills}
+          onGoToBills={() => setPage("bills")}
+          onAddBill={() => { setPage("bills"); setTriggerAddModal(true); }}
+          onTogglePaid={togglePaid}
+        />
+      ) : (
+        <BillsPage
+          bills={bills}
           onSave={saveBill}
-          onClose={() => { setShowModal(false); setEditBill(null); }}
+          onDelete={deleteBill}
+          onTogglePaid={togglePaid}
+          openAddModal={triggerAddModal}
+          onClearOpenAdd={() => setTriggerAddModal(false)}
         />
       )}
     </Shell>
