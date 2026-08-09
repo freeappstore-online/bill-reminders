@@ -103,7 +103,7 @@ function formatDate(dateStr: string): string {
 }
 
 function formatCurrency(n: number): string {
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+  return n.toLocaleString("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 });
 }
 
 function newId(): string {
@@ -191,7 +191,7 @@ function BillModal({ bill, preset, onSave, onClose }: ModalProps) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Amount ($)</label>
+            <label className="text-sm font-semibold" style={{ color: "var(--muted)" }}>Amount (A$)</label>
             <input type="number" min="0" step="0.01" className="rounded-[0.75rem] px-3 py-2 text-sm outline-none"
               style={inputStyle} placeholder="0.00" value={amount}
               onChange={e => { setAmount(e.target.value); setError(""); }} />
