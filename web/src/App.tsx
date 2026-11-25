@@ -65,8 +65,12 @@ const BILL_PRESETS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function localDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function today(): string {
-  return new Date().toISOString().split("T")[0];
+  return localDate(new Date());
 }
 
 function daysUntil(dateStr: string): number {
@@ -120,7 +124,7 @@ function nextDueDate(bill: Bill): string {
     else if (bill.frequency === "monthly") base.setMonth(base.getMonth() + 1);
     else if (bill.frequency === "yearly") base.setFullYear(base.getFullYear() + 1);
   }
-  return base.toISOString().split("T")[0];
+  return localDate(base);
 }
 
 function getGreeting(): string {
@@ -355,7 +359,7 @@ function HomePage({ bills, onGoToBills, onAddBill, onTogglePaid }: HomePageProps
   const dueSoon = unpaid.filter(b => { const d = daysUntil(b.dueDate); return d >= 0 && d <= 7; });
   const totalDue = unpaid.reduce((s, b) => s + b.amount, 0);
   const totalPaidThisMonth = bills
-    .filter(b => b.paid && b.paidDate?.startsWith(new Date().toISOString().slice(0, 7)))
+    .filter(b => b.paid && b.paidDate?.startsWith(today().slice(0, 7)))
     .reduce((s, b) => s + b.amount, 0);
 
   const urgent = [...overdue, ...dueSoon].sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 4);
